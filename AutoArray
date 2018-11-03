@@ -1,0 +1,65 @@
+#include <malloc.h>
+#include <iostream>
+void MemFree(void** ptr)
+{
+   if (ptr)
+   {
+      free(*ptr);
+      *ptr = NULL;
+   }
+}
+
+template<typename type>
+struct def_purgefunction_impl{
+   static const bool value = false;
+};
+
+#define FORCE_USE_NO_PURGE(type) static_assert(def_purgefunction_impl<type>::value == false, "error!");
+#define DISALLOW_COPY_ASSGIN(Type)\
+   Type(const Type&);\
+   void operator = (const Type&);
+
+template<typename Type>
+class AutoArray
+{
+private:
+   DISALLOW_COPY_ASSGIN(AutoArray);
+   Type* & _aElem;
+   const int& _nElem;
+   const int _nElmLcl;
+   void(*_Purge)(Type* ptr);
+
+public:
+   explicit AutoArray(Type* &ptr, void(*PurgeFun)(Type *ptr) = NULL) :
+      _aElem(ptr), _nElmLcl(1), _nElem(_nElmLcl), _Purge(PurgeFun){ };
+
+   explicit AutoArray(Type* &ptr, const int &nElm, void(*PurgeFun)(Type* ptr) = NULL) :
+      _aElem(ptr), _nElmLcl(1), _nElem(nElm), _Purge(PurgeFun){ };
+
+   ~AutoArray()
+   {
+      if (_aElem)
+      {
+         if (_Purge)
+         {
+            for (int i(0); i < _nElem; ++i)
+            {
+               _Purge((_aElem)+i);
+            }
+         }
+         MemFree((void**)&_aElem);
+      }
+   }
+};
+
+#define C_AUTO_ARRAY(type, n, pArr)\
+int n(0); \
+type (*pArr)(NULL);\
+FORCE_USE_NO_PURGE(type);\
+AutoArray<type> pArr##CleAner(pArr, n);
+
+int main()
+{
+   C_AUTO_ARRAY(int, iCount, p);
+   return 0;
+}
